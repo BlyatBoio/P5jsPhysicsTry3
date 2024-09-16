@@ -3,7 +3,7 @@ let drawVertecies = false;
 let drawConnections = true;
 let drawBoundingBoxes = false;
 let gravity;
-let drawDebugValues = true;
+let drawDebugValues = false;
 // variable to define whether or not physics is run step by step instead of at the frame rate
 let stepByStep = false;
 let vertexID = 0;
@@ -13,17 +13,25 @@ let worldObjects = [];
 let vertecies = [];
 let connections = [];
 let rigidity = 50;
-let forceDampening = 0.1;
+let forceDampening1 = 0.9;
+let forceDampening2 = 0.94;
+let elasticityMultiplier = 0.5;
+
+let mouseControlsOn = true;
+
+// current issues
+
+
 
 function setup() {
   createCanvas(windowWidth, windowHeight);
 
-  createObject(400, 50, 10, 1, 1, true, true, 10);
+  createObject(400, 400, 10, 1, 20, true, true, 2);
   worldObjects[0].vertecies[0].isStatic = true;
 
 
   // define gravity as a force class
-  gravity = new force(0, 1, 0.9, 0, "Global", false);
+  gravity = new force(0, 1, 5, 0, "Global", false);
   // apply gravity
   for(let i = 0; i < vertecies.length; i++){
     vertecies[i].addForce(gravity);
@@ -130,8 +138,16 @@ class objectVertex {
       // apply all of the forces in the vertex's forces array
       let divisor = (this.forces.length)
       for(let i = 0; i < this.forces.length; i++){
-        this.moveVec.x += (this.forces[i].forceVector.x / divisor) * forceDampening;
-        this.moveVec.y += (this.forces[i].forceVector.y / divisor) * forceDampening;
+        let xforce = (this.forces[i].forceVector.x / divisor) * forceDampening1;
+        let yforce = (this.forces[i].forceVector.y / divisor) * forceDampening1;
+
+        if(this.forces[i].type == "Elastic"){
+          xforce *= elasticityMultiplier;
+          yforce *= elasticityMultiplier;
+        }
+
+        this.moveVec.x += xforce;
+        this.moveVec.y += yforce;
         this.forces[i].update();
         // apply forces to other connected vertecies
         for(let i2 = 0; i2 < this.connections.length; i2++){
@@ -144,11 +160,19 @@ class objectVertex {
       }
       // updating movement also includes updating the position which is also done
       // if it is not static
+      this.moveVec.x *= forceDampening2;
+      this.moveVec.y *= forceDampening2;
       this.x += this.moveVec.x;
       this.y += this.moveVec.y;
     }
     // culling forces that have minimal impact and will generally only cause lag
     this.cullForces();
+    let mouseTravled = dist(mouseX, mouseY, pwinMouseX, pwinMouseY);
+    if(mouseIsPressed && dist(this.x, this.y, mouseX, mouseY) < 50 + mouseTravled + abs(this.moveVec.x) + abs(this.moveVec.y)){
+      this.x = mouseX;
+      this.y = mouseY;
+    }
+    this.doVertexColiions();
     this.x = constrain(this.x, 0, width);
     this.y = constrain(this.y, 0, height);
   }
@@ -214,15 +238,17 @@ class objectVertex {
       textSize(10);
       let debugYStart = 50;
       text("x: " + this.x, this.x, this.y - debugYStart);
-      text("y: " + this.x, this.x, this.y - (debugYStart-10));
+      text("y: " + this.y, this.x, this.y - (debugYStart-10));
       text("Static: " + this.isStatic, this.x, this.y - (debugYStart-20));
       text("ID: " + this.id, this.x, this.y - (debugYStart-30));
     }
   }
+  doVertexColiions(){
+  }
 }
 
 class force {
-  constructor(x, y, s, a, t, t1, cd){
+  constructor(x, y, s, a, t, t1, cd, rand){
     // position variables
     this.x = x;
     this.y = y;
@@ -251,6 +277,11 @@ class force {
     }
     this.timer = 0;
 
+    this.randforce = rand;
+    if(rand == undefined){
+      this.randforce = 0;
+    }
+
     // random ID to check against other forces
     this.randID = random(0, 100);
   }
@@ -275,6 +306,8 @@ class force {
     return this.forceVector();
   }
   update(){
+    this.forceVector.x = (this.x + random(-this.randforce, this.randforce)) * this.strengthMultiplier;
+    this.forceVector.y = (this.y + random(-this.randforce, this.randforce)) * this.strengthMultiplier;
     this.timer ++;
     if(this.timer >= this.cooldown){
       this.forceVector = createVector(0, 0);
@@ -321,11 +354,11 @@ class vertexConnection {
     let d1 = this.getCurrentDistance();
 
     // if it is grater than the base length of the connection
-    if(d1 > this.baseLength + 20){
+    if(d1 > this.baseLength * 1.5){
       // call the apply forces function.
       this.applyForces(d1, 1);
     }
-    if(d1 < this.baseLength - 20){
+    if(d1 < this.baseLength * 1.5){
       // call the apply forces function.
       this.applyForces(d1, 2);
     }
@@ -343,7 +376,19 @@ class vertexConnection {
     // variable to store the strength of the force
     // current distance - the base distance in order to get the current distance to the target distance
     // divide this by the elacticity to give more control
-    let forceMult = pow(1/(d1 - this.baseLength), -1) / (this.elasticity);
+    let distDistance = (d1 - this.baseLength);
+    let forceMult;
+    if(type == 1){
+      forceMult = distDistance / this.elasticity;
+    }
+    if(type == 2){
+      forceMult = distDistance / this.elasticity;
+     }
+    strokeWeight(3);
+    stroke(forceMult * 5, 100, 100);
+    line(this.vertex1.x, this.vertex1.y, this.vertex2.x, this.vertex2.y);
+    stroke(0);
+    strokeWeight(1);
     let positiveForce;
     let negativeForce;
 
@@ -371,23 +416,20 @@ class objectc {
 
     // filled by adding all of the vertecies within the given connections
     for(let i = 0; i < connections.length; i++){
+      
       let a = 0;
       // checks if the ID is the same as another vertex in the list
-      for(let i2 = 0; i2 < this.vertecies.length; i2++){
-        if(connections[i].vertex1.id == this.vertecies[i2].id) a++;
-      }
-
+      for(let i2 = 0; i2 < this.vertecies.length; i2++) if(connections[i].vertex1.id == this.vertecies[i2].id) a++;
       // pushes the vertex
-      a = 0;
       if(a == 0) this.vertecies.push(connections[i].vertex1);
 
-      // again checks the ID against the other IDs
-      for(let i2 = 0; i2 < this.vertecies.length; i2++){
-        if(connections[i].vertex2.id == this.vertecies[i2].id) a++;
-      }
 
+      a = 0;
+      // again checks the ID against the other IDs
+      for(let i2 = 0; i2 < this.vertecies.length; i2++) if(connections[i].vertex2.id == this.vertecies[i2].id) a++;
       // pushes the vertex
       if(a == 0) this.vertecies.push(connections[i].vertex2);
+
     }
     // create it's own bounding box
     this.boundingBox = new objectBoundingBox(this);
