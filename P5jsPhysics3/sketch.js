@@ -3,32 +3,31 @@ let drawVertecies = false;
 let drawConnections = true;
 let drawBoundingBoxes = false;
 let gravity;
-let drawDebugValues = false;
+let drawDebugValues = true;
 // variable to define whether or not physics is run step by step instead of at the frame rate
 let stepByStep = false;
 let vertexID = 0;
+let connectorID = 0;
 
 // array to hold all of the world objects
 let worldObjects = [];
 let vertecies = [];
 let connections = [];
 let rigidity = 50;
-let forceDampening1 = 0.9;
+let forceDampening1 = 0.98;
 let forceDampening2 = 0.94;
 let elasticityMultiplier = 0.5;
 
 let mouseControlsOn = true;
+let nonStaticFollowMouse = false;
 
 // current issues
 
-
-
 function setup() {
   createCanvas(windowWidth, windowHeight);
-
-  createObject(400, 400, 10, 1, 20, true, true, 2);
-  worldObjects[0].vertecies[0].isStatic = true;
-
+  let a1 = createSquareObject(600, 100, 200, 200, 0.5);
+  let a2 = createSquareObject(300, 100, 200, 200, 0.5);
+  //worldObjects[0].vertecies[0].isStatic = true;
 
   // define gravity as a force class
   gravity = new force(0, 1, 5, 0, "Global", false);
@@ -42,7 +41,12 @@ function draw() {
   background(150);
   drawConditionals();
   if(stepByStep == false){
-    worldObjects[0].doPhysics();
+    for(let i = 0; i < worldObjects.length; i++){
+      worldObjects[i].doPhysics();
+    }
+  }
+  if(drawDebugValues == true){
+    drawDebug();
   }
 }
 
@@ -71,13 +75,34 @@ function newConnection(v1, v2, e){
   return c;
 }
 
+function keyPressed(){
+  for(let i = 0; i < vertecies.length; i++){
+    let d = dist(mouseX, mouseY, vertecies[i].x, vertecies[i].y);
+    if(d < 20 + abs(vertecies[i].moveVec.x) + abs(vertecies[i].moveVec.y)){
+      if(keyCode === 70) vertecies[i].isStatic = !vertecies[i].isStatic;
+      if(keyCode === 67) vertecies[i].isStatic = false;
+    }
+  }
+}
+
 function mousePressed(){
   if(stepByStep == true){
     worldObjects[0].doPhysics();
   }
 }
 
-function createObject(startx, starty, rowSize, columnSize, spacing, rowConnectors, columnConnectors, elacticity){
+function drawDebug(){
+  let startx = 20;
+  let starty = 50;
+  let spacing = 20;
+  text("FPS: " + round(frameRate()), startx, starty);
+  text("Vertecies: " + vertecies.length, startx, starty + spacing);
+  text("Connections: " + connections.length, startx, starty + spacing * 2);
+  text("Objects: " + worldObjects.length, startx, starty + spacing * 3);
+
+}
+
+function createStringObject(startx, starty, rowSize, columnSize, spacing, rowConnectors, columnConnectors, elacticity){
   // arrays to hold the vertecies and connectors
   let vertecies = [];
   let connectors = [];
@@ -100,6 +125,96 @@ function createObject(startx, starty, rowSize, columnSize, spacing, rowConnector
   let obj = new objectc(connectors);
   worldObjects.push(obj);
   return obj;
+}
+
+function createSquareObject(startx, starty, w, h, elacticity){
+  let v1 = newVertex(startx, starty, false);
+  let v2 = newVertex(startx + w, starty, false);
+  let v3 = newVertex(startx + w, starty + h, false);
+  let v4 = newVertex(startx, starty + h, false);
+  //let v5 = newVertex(startx + w/2, starty + h/2, false);
+  let e = elacticity
+  let c1 = newConnection(v1, v2, e);
+  let c2 = newConnection(v2, v3, e);
+  let c3 = newConnection(v3, v4, e);
+  let c4 = newConnection(v4, v1, e);
+  let c5 = newConnection(v1, v3, e);
+  let c6 = newConnection(v2, v4, e);
+  //let c7 = newConnection(v1, v5, e / 2);
+  //let c8 = newConnection(v2, v5, e / 2);
+  //let c9 = newConnection(v3, v5, e / 2);
+  //let c10 = newConnection(v4, v5, e / 2);
+  //let o1 = new objectc([c1, c2, c3, c4, c7, c8, c9, c10]);
+  let o1 = new objectc([c1, c2, c3, c4, c5, c6]);
+  worldObjects.push(o1);
+  return o1;
+}
+
+function collc(x, y, w, h, x2, y2, w2, h2, xb, yb){
+  if(xb == undefined) xb = 0;
+  if(yb == undefined) yb = 0;
+  x -= xb/2
+  w += xb;
+  y -= yb/2;
+  h += yb;
+  x2 -= xb/2;
+  w2 += xb;
+  y2 -= yb/2;
+  h2 += yb;
+
+  if(keyIsDown(72)){
+    fill(200, 0, 0, 100);
+    stroke(0);
+    rect(x, y, w, h);
+    rect(x2, y2, w2, h2);
+  }
+
+  if(x + w > x2 && x < x2 + w2 && y + h > y2 && y < y2 + h) return true;
+  return false;
+}
+
+function lineline(x1, y1, x2, y2, x3, y3, x4, y4){
+  // get the distance from x1, y1 to x2, y2
+  let d1 = dist(x1, y1, x2, y2);
+
+  // v1 is a new vector with a directly down magnitude
+  let v1 = createVector(0, 1);
+
+  // get the angle from x1, y1 to x2, y2
+  let a1 = atan2(y1 - y2, x1 - x2);
+
+  // rotate the vector
+  v2.rotate(a1);
+
+  let x = x1;
+  let y = y1;
+
+  // for the distance of the line, check each point on the line agains the other given line;
+  for(let i = 0; i < d1; i++){
+    if(pointLine(x3, y3, x4, y4, x, y) == true){
+      // return the point of contact
+      return [x, y];
+    }
+    x += v1.x;
+    y += v1.y
+  }
+
+}
+
+function pointLine(x1, y1, x2, y2, x3, y3){
+  let d1 = dist(x1, y1, x2, y2);
+  let d2 = dist(x3, y3, x1, y1);
+  let d3 = dist(x3, y3, x2, y2);
+  if(keyIsDown(72)){
+    strokeWeight(3);
+    stroke(200, 100, 100, 100);
+    line(x1, y1, x2, y2);
+    ellipse(x3, y3, 1);
+  }
+  if(dist(d2 + d3, 0, d1, 0) < 5){
+    return true;
+  }
+  return false;
 }
 
 class objectVertex {
@@ -136,7 +251,7 @@ class objectVertex {
     // if it is not static
     if(this.isStatic == false){
       // apply all of the forces in the vertex's forces array
-      let divisor = (this.forces.length)
+      let divisor = (this.forces.length);
       for(let i = 0; i < this.forces.length; i++){
         let xforce = (this.forces[i].forceVector.x / divisor) * forceDampening1;
         let yforce = (this.forces[i].forceVector.y / divisor) * forceDampening1;
@@ -154,12 +269,11 @@ class objectVertex {
           // check if it is vertex one or two
           if(this.forces[i].randID = gravity.randID){
             if(this.connections[i2].vertex1.id == this.id) this.connections[i2].vertex2.addForce(this.forces[i]);
-            else this.connections[i2].vertex1.addForce(this.forces[i]);
           }
         }
       }
       // updating movement also includes updating the position which is also done
-      // if it is not static
+      this.doVertexColiions();
       this.moveVec.x *= forceDampening2;
       this.moveVec.y *= forceDampening2;
       this.x += this.moveVec.x;
@@ -168,11 +282,12 @@ class objectVertex {
     // culling forces that have minimal impact and will generally only cause lag
     this.cullForces();
     let mouseTravled = dist(mouseX, mouseY, pwinMouseX, pwinMouseY);
-    if(mouseIsPressed && dist(this.x, this.y, mouseX, mouseY) < 50 + mouseTravled + abs(this.moveVec.x) + abs(this.moveVec.y)){
-      this.x = mouseX;
-      this.y = mouseY;
+    if(nonStaticFollowMouse == true || this.isStatic == true){
+      if(mouseIsPressed && dist(this.x, this.y, mouseX, mouseY) < 50 + mouseTravled + abs(this.moveVec.x) + abs(this.moveVec.y)){
+        this.x = mouseX;
+        this.y = mouseY;
+      }
     }
-    this.doVertexColiions();
     this.x = constrain(this.x, 0, width);
     this.y = constrain(this.y, 0, height);
   }
@@ -244,6 +359,50 @@ class objectVertex {
     }
   }
   doVertexColiions(){
+    for(let i = 0; i < vertecies.length; i++){
+      let b = 0;
+      for(let i2 = 0; i2 < this.parentObject.vertecies.length; i2++){
+        let a = this.parentObject.vertecies[i2];
+        if(vertecies[i].id == a.id) b ++;
+      }
+      if(b == 0 && vertecies[i].id != this.id){
+        let obj = vertecies[i];
+        if(collc(this.x, this.y, 0, 0, obj.x, obj.y, 0, 0, 10, 10)){
+          let a = atan2(this.y - obj.y, this.x - obj.x) - PI/2;
+          let v1 = createVector(0, 5);
+          v1.rotate(a);
+          let b = 1/pow(dist(this.x, this.y, obj.x, obj.y), 2);
+          if(v1.x < 0 && this.moveVec.x > 0) this.moveVec.x = -b;
+          if(v1.x > 0 && this.moveVec.x < 0) this.moveVec.x = b;
+          if(v1.y < 0 && this.moveVec.y > 0) this.moveVec.y = -b;
+          if(v1.y > 0 && this.moveVec.y < 0) this.moveVec.y = b;
+        }
+      }
+    }
+    for(let i = 0; i < connections.length; i++){
+        let b = 0;
+        for(let i2 = 0; i2 < this.connections.length; i2++){
+          let a = this.connections[i2];
+          if(connections[i].id == a.id) b ++;
+        }
+        if(b == 0){
+          let con = connections[i];
+          if(pointLine(con.vertex1.x, con.vertex1.y, con.vertex2.x, con.vertex2.y, this.x, this.y) == true){
+            // get the average middle point of the line by adding half of the width and height to vertex 1;
+            let centerPoint = createVector(con.vertex1.x + dist(con.vertex1.x, 0, con.vertex2.x, 0), con.vertex1.y + dist(con.vertex1.y, 0, con.vertex2.y, 0));
+            let a = atan2(this.y - centerPoint.y, this.x - centerPoint.x) - PI/2;
+            let v1 = createVector(0, 5);
+            v1.rotate(a);
+            let b = 1/pow(dist(this.x, this.y, centerPoint.x, centerPoint.y) * 100, 2);
+            if(v1.x < 0 && this.moveVec.x > 0) this.moveVec.x = -b;
+            else
+            if(v1.x > 0 && this.moveVec.x < 0) this.moveVec.x = b;
+            if(v1.y < 0 && this.moveVec.y > 0) this.moveVec.y = -b;
+            else
+            if(v1.y > 0 && this.moveVec.y < 0) this.moveVec.y = b;
+        }
+      }
+    }
   }
 }
 
@@ -331,6 +490,9 @@ class vertexConnection {
 
     // describes the initial length between the vertecies and the initial target distance
     this.baseLength = dist(v1.x, v1.y, v2.x, v2.y);
+
+    this.id = connectorID;
+    connectorID ++;
   }
   getCurrentDistance(){
     // returns the distance from vertex one to vertex 2
@@ -347,18 +509,17 @@ class vertexConnection {
   drawSelf(){
     stroke(0);
     strokeWeight(1);
-    line(this.vertex1.x, this.vertex1.y, this.vertex2.x, this.vertex2.y);
   }
   checkForces(){
     // get tjhe distance between points
     let d1 = this.getCurrentDistance();
 
     // if it is grater than the base length of the connection
-    if(d1 > this.baseLength * 1.5){
+    if(d1 > this.baseLength){
       // call the apply forces function.
       this.applyForces(d1, 1);
     }
-    if(d1 < this.baseLength * 1.5){
+    if(d1 < this.baseLength){
       // call the apply forces function.
       this.applyForces(d1, 2);
     }
@@ -376,14 +537,9 @@ class vertexConnection {
     // variable to store the strength of the force
     // current distance - the base distance in order to get the current distance to the target distance
     // divide this by the elacticity to give more control
-    let distDistance = (d1 - this.baseLength);
+    let distDistance = d1 - this.baseLength
     let forceMult;
-    if(type == 1){
-      forceMult = distDistance / this.elasticity;
-    }
-    if(type == 2){
-      forceMult = distDistance / this.elasticity;
-     }
+    forceMult = distDistance / this.elasticity;
     strokeWeight(3);
     stroke(forceMult * 5, 100, 100);
     line(this.vertex1.x, this.vertex1.y, this.vertex2.x, this.vertex2.y);
@@ -401,8 +557,36 @@ class vertexConnection {
       negativeForce = new force(0, 1, forceMult, a2, "Elastic", true, lifespan);
     }
 
-      this.vertex1.addForce(positiveForce);
-      this.vertex2.addForce(negativeForce);
+    this.vertex1.addForce(positiveForce);
+    this.vertex2.addForce(negativeForce);
+    this.doCollisions();
+  }
+  doCollisions(){
+    for(let i = 0; i < vertecies.length; i++){
+      if(vertecies[i].id != this.vertex1.id && vertecies[i].id != this.vertex2.id){
+        if(pointLine(this.vertex1.x, this.vertex1.y, this.vertex2.x, this.vertex2.y, vertecies[i].x, vertecies[i].y) == true){
+          let centerPoint = createVector(this.vertex1.x + (this.vertex2.x - this.vertex1.x), this.vertex1.y + (this.vertex2.x - this.vertex1.x));
+          let a = atan2(centerPoint.y - vertecies[i].y, centerPoint.x - vertecies[i].x);
+          let v1 = createVector(0, 1);
+          v1.rotate(a);
+          let b = 1/pow(dist(vertecies[i].x, vertecies[i].y, centerPoint.x, centerPoint.y) / 200, 2);
+
+          if(v1.x < 0 && this.vertex1.moveVec.x >= 0) this.vertex1.moveVec.x = -b;
+          else
+          if(v1.x > 0 && this.vertex1.moveVec.x < 0) this.vertex1.moveVec.x = b;
+          if(v1.y < 0 && this.vertex1.moveVec.y >= 0) this.vertex1.moveVec.y = -b;
+          else
+          if(v1.y > 0 && this.vertex1.moveVec.y < 0) this.vertex1.moveVec.y = b;
+
+          if(v1.x < 0 && this.vertex2.moveVec.x >= 0) this.vertex2.moveVec.x = -b;
+          else
+          if(v1.x > 0 && this.vertex2.moveVec.x < 0) this.vertex2.moveVec.x = b;
+          if(v1.y < 0 && this.vertex2.moveVec.y >= 0) this.vertex2.moveVec.y = -b;
+          else
+          if(v1.y > 0 && this.vertex2.moveVec.y < 0) this.vertex2.moveVec.y = b;
+        }
+      }
+    }
   }
 }
 
@@ -431,6 +615,12 @@ class objectc {
       if(a == 0) this.vertecies.push(connections[i].vertex2);
 
     }
+
+    // apply self to vertecies as the "this.parentObject" variable
+    for(let i = 0; i < this.vertecies.length; i++){
+      this.vertecies[i].parentObject = this;
+    }
+
     // create it's own bounding box
     this.boundingBox = new objectBoundingBox(this);
   }
