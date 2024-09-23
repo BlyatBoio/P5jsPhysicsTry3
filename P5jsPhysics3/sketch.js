@@ -3,35 +3,42 @@ let drawVertecies = false;
 let drawConnections = true;
 let drawBoundingBoxes = false;
 let gravity;
-let drawDebugValues = false;
+let drawDebugValues = true;
 // variable to define whether or not physics is run step by step instead of at the frame rate
 let stepByStep = false;
 let vertexID = 0;
+let connectorID = 0;
 
 // array to hold all of the world objects
 let worldObjects = [];
 let vertecies = [];
 let connections = [];
 let rigidity = 50;
-let forceDampening1 = 0.9;
+let forceDampening1 = 0.98;
 let forceDampening2 = 0.94;
-let elasticityMultiplier = 0.5;
+let elasticityMultiplier = 0.8;
 
 let mouseControlsOn = true;
+let nonStaticFollowMouse = false;
+let a1;
+let a2;
+let a3;
 
 // current issues
 
-
-
 function setup() {
   createCanvas(windowWidth, windowHeight);
+  // square objects can be created with a startx, starty, width, height, and elasticity
+  //createSquareObject(200, 200, 100, 100, 0.8);
 
-  createObject(400, 400, 10, 1, 20, true, true, 2);
-  worldObjects[0].vertecies[0].isStatic = true;
+  // string objects can become meshes, they have a width and a height
+  //a3 = createStringObject(200, 100, 15, 7, 50, true, true, 0.5);
 
+  // you can set other object to static by pressing F but you can do so in the code as well with
+  //worldObjects[0].vertecies[0].isStatic = true;
 
   // define gravity as a force class
-  gravity = new force(0, 1, 5, 0, "Global", false);
+  gravity = new force(0, 1, 3, 0, "Global", false);
   // apply gravity
   for(let i = 0; i < vertecies.length; i++){
     vertecies[i].addForce(gravity);
@@ -42,7 +49,12 @@ function draw() {
   background(150);
   drawConditionals();
   if(stepByStep == false){
-    worldObjects[0].doPhysics();
+    for(let i = 0; i < worldObjects.length; i++){
+      worldObjects[i].doPhysics();
+    }
+  }
+  if(drawDebugValues == true){
+    drawDebug();
   }
 }
 
@@ -55,45 +67,73 @@ function drawConditionals(){
   }
 }
 
-function newVertex(x, y, s){
-  if(s == undefined){
-    s = false;
-  }
-  let v =  new objectVertex(x, y, s, vertexID);
+function newVertex(x, y, s, c){
+  if(s == undefined) s = false;
+  let v =  new objectVertex(x, y, s, vertexID, c);
   vertecies.push(v);
   vertexID ++;
   return v;
 }
 
-function newConnection(v1, v2, e){
-  let c = new vertexConnection(v1, v2, e);
+function newConnection(v1, v2, e, d){
+  if(d == undefined) d = true;
+  let c = new vertexConnection(v1, v2, e, d);
   connections.push(c);
   return c;
+}
+
+function keyPressed(){
+  for(let i = 0; i < vertecies.length; i++){
+    let d = dist(mouseX, mouseY, vertecies[i].x, vertecies[i].y);
+    if(d < 20 + abs(vertecies[i].moveVec.x) + abs(vertecies[i].moveVec.y)){
+      if(keyCode === 70) vertecies[i].isStatic = !vertecies[i].isStatic;
+      if(keyCode === 67) vertecies[i].isStatic = false;
+    }
+  }
+  if(keyCode === 83){
+    stepByStep = !stepByStep;
+  }
 }
 
 function mousePressed(){
   if(stepByStep == true){
     worldObjects[0].doPhysics();
   }
+  //createSquareObject(mouseX, mouseY, 100, 100, 0.5);
+  //worldObjects[worldObjects.length - 1].vertecies[0].addForce(gravity);
+  //worldObjects[worldObjects.length - 1].vertecies[1].addForce(gravity);
+  //worldObjects[worldObjects.length - 1].vertecies[2].addForce(gravity);
+  //worldObjects[worldObjects.length - 1].vertecies[3].addForce(gravity);
 }
 
-function createObject(startx, starty, rowSize, columnSize, spacing, rowConnectors, columnConnectors, elacticity){
+function drawDebug(){
+  let startx = 20;
+  let starty = 50;
+  let spacing = 20;
+  text("FPS: " + round(frameRate()), startx, starty);
+  text("Vertecies: " + vertecies.length, startx, starty + spacing);
+  text("Connections: " + connections.length, startx, starty + spacing * 2);
+  text("Objects: " + worldObjects.length, startx, starty + spacing * 3);
+
+}
+
+function createStringObject(startx, starty, rowSize, columnSize, spacing, rowConnectors, columnConnectors, elacticity){
   // arrays to hold the vertecies and connectors
   let vertecies = [];
   let connectors = [];
   for(let i = 0; i < rowSize; i++){
     vertecies.push([])
     for(let i2 = 0; i2 < columnSize; i2++){
-      vertecies[i].push(newVertex(startx + (i* spacing), starty + (i2 * spacing), false));
+      vertecies[i].push(newVertex(startx + (i* spacing), starty + (i2 * spacing), false, false));
     }
   } 
   for(let i = 0; i < rowSize; i++){
     for(let i2 = 0; i2 < columnSize; i2++){
       if(rowConnectors == true && i < rowSize - 1){
-        connectors.push(newConnection(vertecies[i][i2], vertecies[i + 1][i2], elacticity));
+        connectors.push(newConnection(vertecies[i][i2], vertecies[i + 1][i2], elacticity, false));
       }
       if(columnConnectors == true && i2 < columnSize - 1){
-        connectors.push(newConnection(vertecies[i][i2 + 1], vertecies[i][i2], elacticity));
+        connectors.push(newConnection(vertecies[i][i2 + 1], vertecies[i][i2], elacticity, false));
       }
     }
   }
@@ -102,8 +142,54 @@ function createObject(startx, starty, rowSize, columnSize, spacing, rowConnector
   return obj;
 }
 
+function createSquareObject(startx, starty, w, h, elacticity){
+  let v1 = newVertex(startx, starty, false);
+  let v2 = newVertex(startx + w, starty, false);
+  let v3 = newVertex(startx + w, starty + h, false);
+  let v4 = newVertex(startx, starty + h, false);
+  //let v5 = newVertex(startx + w/2, starty + h/2, false);
+  let e = elacticity
+  let c1 = newConnection(v1, v2, e);
+  let c2 = newConnection(v2, v3, e);
+  let c3 = newConnection(v3, v4, e);
+  let c4 = newConnection(v4, v1, e);
+  let c5 = newConnection(v1, v3, e);
+  let c6 = newConnection(v2, v4, e);
+  //let c7 = newConnection(v1, v5, e / 2);
+  //let c8 = newConnection(v2, v5, e / 2);
+  //let c9 = newConnection(v3, v5, e / 2);
+  //let c10 = newConnection(v4, v5, e / 2);
+  //let o1 = new objectc([c1, c2, c3, c4, c7, c8, c9, c10]);
+  let o1 = new objectc([c1, c2, c3, c4, c5, c6]);
+  worldObjects.push(o1);
+  return o1;
+}
+
+function collc(x, y, w, h, x2, y2, w2, h2, xb, yb){
+  if(xb == undefined) xb = 0;
+  if(yb == undefined) yb = 0;
+  x -= xb/2
+  w += xb;
+  y -= yb/2;
+  h += yb;
+  x2 -= xb/2;
+  w2 += xb;
+  y2 -= yb/2;
+  h2 += yb;
+
+  if(keyIsDown(72)){
+    fill(200, 0, 0, 100);
+    stroke(0);
+    rect(x, y, w, h);
+    rect(x2, y2, w2, h2);
+  }
+
+  if(x + w > x2 && x < x2 + w2 && y + h > y2 && y < y2 + h) return true;
+  return false;
+}
+
 class objectVertex {
-  constructor(x, y, s, id){
+  constructor(x, y, s, id, c){
     // position variables
     this.x = x;
     this.y = y;
@@ -124,6 +210,9 @@ class objectVertex {
 
     // ID used commonly to ensure it is not added to an array twice
     this.id = id;
+    if(c == undefined){
+      c = true;
+    }
   }
   setPosition(x, y){
     // if the object is not static, update the x and y
@@ -136,7 +225,7 @@ class objectVertex {
     // if it is not static
     if(this.isStatic == false){
       // apply all of the forces in the vertex's forces array
-      let divisor = (this.forces.length)
+      let divisor = (this.forces.length);
       for(let i = 0; i < this.forces.length; i++){
         let xforce = (this.forces[i].forceVector.x / divisor) * forceDampening1;
         let yforce = (this.forces[i].forceVector.y / divisor) * forceDampening1;
@@ -154,12 +243,10 @@ class objectVertex {
           // check if it is vertex one or two
           if(this.forces[i].randID = gravity.randID){
             if(this.connections[i2].vertex1.id == this.id) this.connections[i2].vertex2.addForce(this.forces[i]);
-            else this.connections[i2].vertex1.addForce(this.forces[i]);
           }
         }
       }
       // updating movement also includes updating the position which is also done
-      // if it is not static
       this.moveVec.x *= forceDampening2;
       this.moveVec.y *= forceDampening2;
       this.x += this.moveVec.x;
@@ -168,11 +255,12 @@ class objectVertex {
     // culling forces that have minimal impact and will generally only cause lag
     this.cullForces();
     let mouseTravled = dist(mouseX, mouseY, pwinMouseX, pwinMouseY);
-    if(mouseIsPressed && dist(this.x, this.y, mouseX, mouseY) < 50 + mouseTravled + abs(this.moveVec.x) + abs(this.moveVec.y)){
-      this.x = mouseX;
-      this.y = mouseY;
+    if(nonStaticFollowMouse == true || this.isStatic == true){
+      if(mouseIsPressed && dist(this.x, this.y, mouseX, mouseY) < 50 + mouseTravled + abs(this.moveVec.x) + abs(this.moveVec.y)){
+        this.x = mouseX;
+        this.y = mouseY;
+      }
     }
-    this.doVertexColiions();
     this.x = constrain(this.x, 0, width);
     this.y = constrain(this.y, 0, height);
   }
@@ -242,8 +330,6 @@ class objectVertex {
       text("Static: " + this.isStatic, this.x, this.y - (debugYStart-20));
       text("ID: " + this.id, this.x, this.y - (debugYStart-30));
     }
-  }
-  doVertexColiions(){
   }
 }
 
@@ -316,7 +402,7 @@ class force {
 }
 
 class vertexConnection {
-  constructor(v1, v2, e){
+  constructor(v1, v2, e, d){
     // describe the vertecies as their own sepperate variables
     this.vertex1 = v1;    
     this.vertex2 = v2;    
@@ -331,6 +417,9 @@ class vertexConnection {
 
     // describes the initial length between the vertecies and the initial target distance
     this.baseLength = dist(v1.x, v1.y, v2.x, v2.y);
+
+    this.id = connectorID;
+    connectorID ++;
   }
   getCurrentDistance(){
     // returns the distance from vertex one to vertex 2
@@ -344,21 +433,27 @@ class vertexConnection {
     // returns the arctangent angle between the vertecies in radians
     return atan2(this.vertex2.y - this.vertex1.y, this.vertex2.x -this.vertex1.x) + PI/2;
   }
-  drawSelf(){
+  drawSelf(){    
+    let d1 = this.getCurrentDistance();
+    let distDistance = d1 - this.baseLength
+    let forceMult;
+    forceMult = distDistance / this.elasticity;
+    strokeWeight(3);
+    stroke(map(forceMult, 0, 100, 0, 255), 100, 100);
+    line(this.vertex1.x, this.vertex1.y, this.vertex2.x, this.vertex2.y);
     stroke(0);
     strokeWeight(1);
-    line(this.vertex1.x, this.vertex1.y, this.vertex2.x, this.vertex2.y);
   }
   checkForces(){
     // get tjhe distance between points
     let d1 = this.getCurrentDistance();
 
     // if it is grater than the base length of the connection
-    if(d1 > this.baseLength * 1.5){
+    if(d1 > this.baseLength){
       // call the apply forces function.
       this.applyForces(d1, 1);
     }
-    if(d1 < this.baseLength * 1.5){
+    if(d1 < this.baseLength){
       // call the apply forces function.
       this.applyForces(d1, 2);
     }
@@ -376,19 +471,9 @@ class vertexConnection {
     // variable to store the strength of the force
     // current distance - the base distance in order to get the current distance to the target distance
     // divide this by the elacticity to give more control
-    let distDistance = (d1 - this.baseLength);
+    let distDistance = d1 - this.baseLength
     let forceMult;
-    if(type == 1){
-      forceMult = distDistance / this.elasticity;
-    }
-    if(type == 2){
-      forceMult = distDistance / this.elasticity;
-     }
-    strokeWeight(3);
-    stroke(forceMult * 5, 100, 100);
-    line(this.vertex1.x, this.vertex1.y, this.vertex2.x, this.vertex2.y);
-    stroke(0);
-    strokeWeight(1);
+    forceMult = distDistance / this.elasticity;
     let positiveForce;
     let negativeForce;
 
@@ -401,8 +486,8 @@ class vertexConnection {
       negativeForce = new force(0, 1, forceMult, a2, "Elastic", true, lifespan);
     }
 
-      this.vertex1.addForce(positiveForce);
-      this.vertex2.addForce(negativeForce);
+    this.vertex1.addForce(positiveForce);
+    this.vertex2.addForce(negativeForce);
   }
 }
 
@@ -431,6 +516,12 @@ class objectc {
       if(a == 0) this.vertecies.push(connections[i].vertex2);
 
     }
+
+    // apply self to vertecies as the "this.parentObject" variable
+    for(let i = 0; i < this.vertecies.length; i++){
+      this.vertecies[i].parentObject = this;
+    }
+
     // create it's own bounding box
     this.boundingBox = new objectBoundingBox(this);
   }
@@ -438,7 +529,7 @@ class objectc {
     // F because there is a conditional "drawVertecies"
     for(let i = 0; i < this.vertecies.length; i++){
       this.vertecies[i].drawSelf();
-  }
+    }
   }
   drawBoundingBox(){
     this.boundingBox.drawSelf();
